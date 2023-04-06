@@ -21,6 +21,9 @@ y = np.array(labels)
 X_test = [np.array(df_test.user_id), np.array(df_test.artist_id)]
 y_test = np.ones(len(df_test.user_id))
 
+df_train.to_csv("df_train.csv", )
+df_test.to_csv("df_test.csv")
+
 # prepped_data = pd.DataFrame.from_dict({"user": user_input, "item": item_input, "label":labels})
 
 
