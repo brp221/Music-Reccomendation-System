@@ -2,26 +2,6 @@ import numpy as np
 import pandas as pd
  
 
-# def get_negatives(uids, iids, items, df_test):
-#     negativeList = []
-#     test_u = df_test['user_id'].values.tolist()
-#     test_i = df_test['artist_id'].values.tolist()
-
-#     test_ratings = list(zip(test_u, test_i))
-#     zipped = set(zip(uids, iids))
-
-#     for (u, i) in test_ratings:
-#         negatives = []
-#         negatives.append((u, i))
-#         for t in range(100):
-#             j = np.random.randint(len(items)) # Get random item id.
-#             while (u, j) in zipped: # Check if there is an interaction
-#                 j = np.random.randint(len(items)) # If yes, generate a new item id
-#             negatives.append(j) # Once a negative interaction is found we add it.
-#         negativeList.append(negatives)
-
-#     return pd.DataFrame(negativeList)
-
 def mask_first(x):
     result = np.ones_like(x)
     result[0] = 0
@@ -53,6 +33,13 @@ def load_dataset(working_dir):
     interactions = df.groupby(['user_id', 'artist'])['track'].count().reset_index().rename(columns={'track':'plays'})
     df = df.merge(interactions, on = ['user_id', 'artist'], how = 'inner')[['user_id', 'artist', 'plays']]
     
+    artists_per_user = df.groupby(by=["user_id"])['artist'].unique().reset_index().rename(columns={'artist':'unique_artists'})
+    artists_per_user['consumed_item_count'] = [len(x) for x in artists_per_user['unique_artists'] ]
+    artists_per_user = artists_per_user.query("consumed_item_count > 5")
+    valid_users = artists_per_user['user_id'].unique()
+    df = df.query("user_id in @valid_users")
+    
+    
      # Create a numeric user_id and artist_id column
     df['user_id'] = df['user_id'].astype("category").cat.codes
     df['artist_id'] = df['artist'].astype("category").cat.codes
@@ -79,29 +66,39 @@ def load_dataset(working_dir):
     return uids, iids, df_train, df_test, users, items, item_lookup, df
 
 def get_train_instances(uids, iids, num_neg, items):
-     """  Returns:
-           user_input : A list containing the records' user_id
-           item_input : A list containing the records' artist_id
-           labels     : A list of labels. 0 indicating that the user has not consumed the item (negative) 
-                                        1 indicating that the user has  consumed the item (positive) 
-     """
-     user_input, item_input, labels = [],[],[]
-     zipped = set(zip(uids, iids))
+    """  Returns:
+          user_input : A list containing the records' user_id
+          item_input : A list containing the records' artist_id
+          labels     : A list of labels. 0 indicating that the user has not consumed the item (negative) 
+                                       1 indicating that the user has  consumed the item (positive) 
+    """
+    user_input, item_input, labels = [],[],[]
+    zipped = set(zip(uids, iids))
+    
+    for (u, i) in zip(uids,iids):
+        # Add  positive interaction
+        user_input.append(u)
+        item_input.append(i)
+        labels.append(1)
+    
+        # Sample a number of random negative interactions
+        for t in range(num_neg):
+            j = np.random.randint(len(items))
+            while (u, j) in zipped:
+                j = np.random.randint(len(items))
+            user_input.append(u)
+            item_input.append(j)
+            labels.append(0)
+    
+    return user_input, item_input, labels
 
-     for (u, i) in zip(uids,iids):
-         # Add  positive interaction
-         user_input.append(u)
-         item_input.append(i)
-         labels.append(1)
 
-         # Sample a number of random negative interactions
-         for t in range(num_neg):
-             j = np.random.randint(len(items))
-             while (u, j) in zipped:
-                 j = np.random.randint(len(items))
-             user_input.append(u)
-             item_input.append(j)
-             labels.append(0)
+def get_holdout_item(user_lookup_id, df_test, item_lookup):
+    holdout_item = df_test.query("user_id == @user_lookup_id")
+    return holdout_item.merge(item_lookup, on = 'artist_id')
 
-     return user_input, item_input, labels
 
+def user_has_consumed(df, user_lookup_id, item_lookup):
+    user_data = df.query(" user_id == @user_lookup_id ")
+    user_data = user_data.merge(item_lookup, on = ['artist_id'], how = 'left')
+    return user_data

@@ -5,9 +5,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt 
 
 os.chdir("/Users/bratislavpetkovic/Desktop/WGU/CAPSTONE/Song_Recommendation_Engine/")
-from Utilities.data_processing import load_dataset, get_train_instances
+from Utilities.data_processing import load_dataset, get_train_instances, get_holdout_item, user_has_consumed
 from Utilities.model_utilities import create_NCF, model_predict
-from Utilities.model_evaluation import user_has_consumed, evaluate_hit_rates, get_metrics
+from Utilities.model_evaluation import evaluate_hit_rates, get_metrics
+
 
 
 
@@ -16,111 +17,95 @@ uids, iids, df_train, df_test, users, items, item_lookup, df = load_dataset(os.g
 user_input, item_input, labels = get_train_instances( uids, iids, 4, items)
 X = [np.array(user_input), np.array(item_input)]
 y = np.array(labels)
+
+X_test = [np.array(df_test.user_id), np.array(df_test.artist_id)]
+y_test = np.ones(len(df_test.user_id))
+
 # prepped_data = pd.DataFrame.from_dict({"user": user_input, "item": item_input, "label":labels})
 
-user_input_8, item_input_8, labels_8 = get_train_instances( uids, iids, 8, items)
-X_8 = [np.array(user_input_8), np.array(item_input_8)]
-y_8 = np.array(labels_8)
 
-user_input_2, item_input_2, labels_2 = get_train_instances( uids, iids, 2, items)
-X_2 = [np.array(user_input_2), np.array(item_input_2)]
-y_2 = np.array(labels_2)
-
+items_pred = np.array(items, dtype='int32')
+enrich_df = df.groupby(by=['user_id'])['artist_id'].count().reset_index().rename(columns={'artist_id':'#_items_consumed'})
 
 #__________________________________________NeuMF MODEL_________________________________________
 
 # NeuMF model initiation 
-latent_features = 8
 epochs = 12
 batch_size = 10000
-learning_rate = 0.05
-
-model = create_NCF(users, items, latent_features=8, learning_rate = 0.05, dense_layers=[64, 32, 16, 8], reg_layers=[0, 0, 0, 0], reg_mf=0)
-hist = model.fit( X, y , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
-
-model_heavy = create_NCF(users, items, latent_features=12, learning_rate = 0.05, dense_layers=[128, 64, 32, 16], reg_layers=[0, 0, 0, 0], reg_mf=0)
-hist_heavy = model_heavy.fit( X, y , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
-rec_sys_heavy_performance = evaluate_hit_rates(model_heavy, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_performance = rec_sys_heavy_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_performance.correctly_labeled))
+learning_rate = 0.01
+bs_2_lr = batch_size / learning_rate
 
 
-model_heavy_2 = create_NCF(users, items, latent_features=16, learning_rate = 0.05, dense_layers=[128, 64, 32, 16], reg_layers=[0, 0, 0, 0], reg_mf=0)
-hist_heavy_2 = model_heavy_2.fit( X, y , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
-
-model_heavy_3 = create_NCF(users, items, latent_features=24, learning_rate = 0.05, dense_layers=[256, 128, 64, 32], reg_layers=[0, 0, 0, 0], reg_mf=0)
-hist_heavy_3 = model_heavy_3.fit( X_8, y_8 , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
-rec_sys_heavy_3_performance = evaluate_hit_rates(model_heavy_3, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_3_performance = rec_sys_heavy_3_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_3_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_3_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_3_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_3_performance.correctly_labeled))
-
-model_heavy_3 = create_NCF(users, items, latent_features=24, learning_rate = 0.05, dense_layers=[256, 128, 64, 32], reg_layers=[0, 0, 0, 0], reg_mf=0)
-hist_heavy_3 = model_heavy_3.fit( X_2, y_2 , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
-rec_sys_heavy_3_performance = evaluate_hit_rates(model_heavy_3, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_3_performance = rec_sys_heavy_3_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_3_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_3_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_3_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_3_performance.correctly_labeled))
-
-
-model_heaviest = create_NCF(users, items, latent_features=12, learning_rate = 0.05, dense_layers=[256, 128, 64, 32, 16], reg_layers=[0, 0, 0, 0, 0], reg_mf=0)
-hist_heaviest = model_heaviest.fit( X, y , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True)
+model_8 = create_NCF(users, items, latent_features=64, learning_rate = learning_rate, dense_layers=[512, 256, 128, 64], reg_layers=[0.15, 0.1, 0.05, 0.0, 0.0], reg_mf=0)
+hist_8 = model_8.fit( X, y , batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True, validation_data = [X_test, y_test])
+print(model_8.summary())
+sys_metrics_8 = evaluate_hit_rates(model_8, df_train, df_test, items, item_lookup, items_pred, enrich_df)
+print("Average Probability: ", np.mean(sys_metrics_8.reccomendation_prob))
+print("Accuracy Classification: ", np.mean(sys_metrics_8.correctly_labeled))
 
 #__________________________________________MODEL EVALUATION_________________________________________
 
-items_pred = np.array(items, dtype='int32')
-
-rec_sys_performance = evaluate_hit_rates(model, df_train, df_test, items, item_lookup, items_pred)
-enrich_df = df.groupby(by=['user_id'])['artist_id'].count().reset_index().rename(columns={'artist_id':'#_items_consumed'})
-rec_sys_performance = rec_sys_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_performance.correctly_labeled))
-
-rec_sys_heavy_performance = evaluate_hit_rates(model_heavy, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_performance = rec_sys_heavy_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_performance.correctly_labeled))
-
-rec_sys_heavy_2_performance = evaluate_hit_rates(model_heavy_2, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_2_performance = rec_sys_heavy_2_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_2_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_2_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_2_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_2_performance.correctly_labeled))
-
-rec_sys_heavy_3_performance = evaluate_hit_rates(model_heavy_3, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heavy_3_performance = rec_sys_heavy_3_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heavy_3_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heavy_3_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heavy_3_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heavy_3_performance.correctly_labeled))
-
-rec_sys_heaviest_performance = evaluate_hit_rates(model_heaviest, df_train, df_test, items, item_lookup, items_pred)
-rec_sys_heaviest_performance = rec_sys_heaviest_performance.merge(enrich_df, how = 'left', on = 'user_id')
-rec_sys_heaviest_performance['correctly_labeled'] =  [0 if x <=0.5 else 1 for x in rec_sys_heaviest_performance.reccomendation_prob]
-print("Average Probability: ", np.mean(rec_sys_heaviest_performance.reccomendation_prob))
-print("Accuracy Classification: ", np.mean(rec_sys_heaviest_performance.correctly_labeled))
 
 
+user_lookup_id = 6
+holdout_item = get_holdout_item(user_lookup_id, df_test, item_lookup).artist_id[0]
+print(holdout_item)
+consumed_df = user_has_consumed(df, user_lookup_id, item_lookup)
+print(consumed_df)
+
+predictions = model_predict(model_8, user_lookup_id, items, item_lookup, items_pred, get_item_name = True )
+prediction_holdout = predictions.query("artist_id == @holdout_item")
+print(prediction_holdout)
+
+sys_metrics_8 = evaluate_hit_rates(model_8, df_train, df_test, items, item_lookup, items_pred, enrich_df)
+print("Average Probability: ", np.mean(sys_metrics_8.reccomendation_prob))
+print("Accuracy Classification: ", np.mean(sys_metrics_8.correctly_labeled))
 
 
+#__________________________________________EXPLORATORY DATA ANALYSIS_________________________________________
+
+sys_metrics_small = sys_metrics_8[sys_metrics_8["#_items_consumed"] < 500]
+sys_metrics_small['bins'] = pd.cut(sys_metrics_8["#_items_consumed"], [0,25,50,75,100, 150, 200, 250, 300, 350, 500], include_lowest=True,right = False)
+consumption_vs_accuracy = sys_metrics_small.groupby(["bins"])["correctly_labeled"].mean().reset_index()
+
+sns.barplot(consumption_vs_accuracy, x = 'bins', y = 'correctly_labeled')
+plt.xlabel('#of items consumed')
+plt.ylabel('recall accuracy')
+plt.xticks(fontsize=10, rotation=25)
+plt.title('Consumption vs Recommendation Accuracy', fontsize=10)
 
 
+sns.histplot(sys_metrics_8['#_items_consumed'])
+plt.xlim(0, 5000)
 
-# sns.histplot(rec_sys_performance, x='reccomendation_prob')s
 
-# sns.regplot(rec_sys_performance, x='reccomendation_prob', y = '#_items_consumed', fit_reg=True,
-#             scatter_kws = {"color": "black", "alpha": 0.5},
-#             line_kws = {"color": "red"})
-# plt.ylim(0, 5000)
+print("TESTING  Loss: {0}  Accuracy: {1}".format(*model_8.evaluate(X_test, y_test, verbose=0)))
 
-# user_lookup_id = 9752
+training_loss = hist_8.history['loss']
+test_loss = hist_8.history['val_loss']
 
-# already_consumed = user_has_consumed(df, user_lookup_id, item_lookup)
+training_acc = hist_8.history['accuracy']
+test_acc = hist_8.history['val_accuracy']
 
-# reccomendation_69 = model_predict(model, user_lookup_id, items, item_lookup, items_pred, get_item_name = False)
-# holdout_index, holdout_prob = get_metrics(reccomendation_69, df_train, df_test, user_lookup_id, item_lookup)
+# Create count of the number of epochs
+epoch_count = range(1, len(training_loss) + 1)
+
+# Visualize loss history
+plt.plot(epoch_count, training_loss, 'r--')
+plt.plot(epoch_count, test_loss, 'b-')
+plt.legend(['Training Loss', 'Test Loss'])
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('LOSS vs EPOCHS')
+plt.show();
+
+# Visualize accuracy history
+plt.plot(epoch_count, training_acc, 'r--')
+plt.plot(epoch_count, test_acc, 'b-')
+plt.legend(['Training Accuracy', 'Test Accuracy'])
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('ACCURACY vs EPOCHS')
+plt.show();
+
+

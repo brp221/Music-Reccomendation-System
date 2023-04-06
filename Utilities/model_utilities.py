@@ -1,4 +1,4 @@
-from tensorflow.keras.layers import Dense, Embedding, Flatten, Input, Concatenate, Multiply
+from tensorflow.keras.layers import Dense, Embedding, Flatten, Input, Concatenate, Multiply, Dropout
 # from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras import Model
 from keras.optimizers import Adam
@@ -8,18 +8,22 @@ import numpy as np
 from keras.utils.vis_utils import plot_model
 
 
-def create_NCF(users, items, latent_features, learning_rate, dense_layers=[64, 32, 16, 8], reg_layers=[0, 0, 0, 0], reg_mf=0):
+def create_NCF(users, items, latent_features, learning_rate = 0.001, dense_layers=[64, 32, 16, 8], reg_layers=[0, 0, 0, 0], reg_mf=0, emb_initializer='RandomNormal'):
     
     #input layer 
     user_input = Input(shape = (1,), name='user_input' )
     item_input = Input(shape = (1,), name='item_input' )
 
     #embeddings 
-    MF_user = Embedding(input_dim = len(users), output_dim = latent_features, embeddings_regularizer= l2(reg_layers[0])) #, embeddings_initializer = emb_initializer , ), 
-    MF_item = Embedding(input_dim = len(items), output_dim = latent_features, embeddings_regularizer= l2(reg_layers[0]))
+    MF_user = Embedding(input_dim = len(users), output_dim = latent_features,
+                        embeddings_regularizer = l2(reg_mf), input_length=1, embeddings_initializer = emb_initializer) 
+    MF_item = Embedding(input_dim = len(items), output_dim = latent_features,
+                        embeddings_regularizer = l2(reg_mf), input_length=1, embeddings_initializer = emb_initializer)
     
-    MLP_user = Embedding(input_dim = len(users), output_dim = int(dense_layers[0]/2), embeddings_regularizer= l2(reg_layers[0]))
-    MLP_item = Embedding(input_dim = len(items), output_dim = int(dense_layers[0]/2), embeddings_regularizer= l2(reg_layers[0])) 
+    MLP_user = Embedding(input_dim = len(users), output_dim = int(dense_layers[0]/2), 
+                         embeddings_regularizer = l2(reg_mf), input_length=1, embeddings_initializer = emb_initializer)
+    MLP_item = Embedding(input_dim = len(items), output_dim = int(dense_layers[0]/2), 
+                         embeddings_regularizer = l2(reg_mf), input_length=1, embeddings_initializer = emb_initializer)
     
     # flatten and mulitply/concatenate
     MF_user_latent = Flatten()(MF_user(user_input))
@@ -32,12 +36,13 @@ def create_NCF(users, items, latent_features, learning_rate, dense_layers=[64, 3
 
     mlp_vector = MLP_latent
     for i in range(1,len(dense_layers)):
-        layer = Dense(dense_layers[i],activity_regularizer=l2(reg_layers[i]),activation='relu',name='layer%d' % i)
+        layer = Dense(dense_layers[i], activation='relu',name='layer%d' % i, 
+                      kernel_regularizer=l2(reg_layers[i]))
         mlp_vector = layer(mlp_vector)
     
-    
+    # dropout = Dropout(0.25)(mlp_vector)
     predict_layer = Concatenate()([MF_latent, mlp_vector])
-    result = Dense(1, activation='sigmoid', name='result') # kernel_initializer='lecun_uniform',
+    result = Dense(1, activation='sigmoid', kernel_initializer='lecun_uniform', name='result')
     
     model = Model(inputs=[user_input,item_input], outputs=result(predict_layer))
     model.compile(optimizer=Adam(learning_rate=learning_rate), loss='binary_crossentropy', metrics=['accuracy'])
@@ -53,6 +58,8 @@ def model_predict(model, user_lookup_id, items, item_lookup, items_pred, get_ite
     if(get_item_name):
         predictions = predictions.merge(item_lookup, right_on='artist_id', left_on='item_id', how = 'left')
     return predictions
+
+
 
 def visualize_model(model):
     model.summary()
