@@ -7,6 +7,8 @@ The final model architecture :
 ![alt text](https://github.com/brp221/Music-Reccomendation-System/blob/main/Images/model.png?raw=true)
 
 Evaluation of Model Fitness (Overfitting vs Underfitting)
-![alt text](https://github.com/brp221/Music-Reccomendation-System/blob/main/Images/Accuracy_.png)
-![alt text](https://github.com/brp221/Music-Reccomendation-System/blob/main/Images/Loss_Function_.png)
 
+<p align="center">
+  <img src="https://github.com/brp221/Music-Reccomendation-System/blob/main/Images/Loss_Function_.png" width="350" title="hover text">
+  <img src="https://github.com/brp221/Music-Reccomendation-System/blob/main/Images/Accuracy_.png" width="450" alt="accessibility text">
+</p>
